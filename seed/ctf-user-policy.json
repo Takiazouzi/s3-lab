@@ -1,0 +1,28 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ListBuckets",
+      "Effect": "Allow",
+      "Action": ["s3:ListAllMyBuckets"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "AuditPublicBucketReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketAcl",
+        "s3:GetBucketPolicy",
+        "s3:GetBucketPolicyStatus",
+        "s3:GetBucketPublicAccessBlock"
+      ],
+      "Resource": "arn:aws:s3:::workshop-ctf-open-assets"
+    },
+    {
+      "Sid": "ReadOwnIamPolicy",
+      "Effect": "Allow",
+      "Action": ["iam:ListUserPolicies", "iam:GetUserPolicy"],
+      "Resource": "arn:aws:iam::000000000000:user/lab-analyst"
+    }
+  ]
+}

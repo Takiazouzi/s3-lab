@@ -1,12 +1,13 @@
-.PHONY: help up check seed reset down
+.PHONY: help up check lab1 lab2 reset down
 
 help:
 	@echo "AWS Security Fundamentals - S3 Labs"
 	@echo ""
+	@echo "  make lab1    Reset and seed Lab 01"
+	@echo "  make lab2    Reset and seed Lab 02"
+	@echo "  make reset   Reset and seed both labs"
 	@echo "  make up      Start floci and wait for the healthcheck"
 	@echo "  make check   Check Docker, AWS CLI v2, curl and floci"
-	@echo "  make seed    Create or refresh the lab data"
-	@echo "  make reset   Wipe floci, restart and reseed"
 	@echo "  make down    Stop floci"
 	@echo ""
 	@echo "After seeding, load the environment in your shell:"
@@ -18,8 +19,11 @@ up:
 check:
 	scripts/check.sh
 
-seed:
-	scripts/seed.sh
+lab1:
+	scripts/reset.sh 1
+
+lab2:
+	scripts/reset.sh 2
 
 reset:
 	scripts/reset.sh

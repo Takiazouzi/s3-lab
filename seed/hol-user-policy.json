@@ -30,17 +30,6 @@
       "Effect": "Allow",
       "Action": ["s3:GetBucketPolicy"],
       "Resource": "arn:aws:s3:::workshop-hol-internal"
-    },
-    {
-      "Sid": "AuditPublicBucketReadOnly",
-      "Effect": "Allow",
-      "Action": [
-        "s3:GetBucketAcl",
-        "s3:GetBucketPolicy",
-        "s3:GetBucketPolicyStatus",
-        "s3:GetBucketPublicAccessBlock"
-      ],
-      "Resource": "arn:aws:s3:::workshop-ctf-open-assets"
     }
   ]
 }

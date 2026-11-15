@@ -1,10 +1,64 @@
 #!/usr/bin/env bash
-# Seeds floci with the lab buckets, objects, IAM user and policies.
+# Seeds floci with one lab or both labs.
 # Intentionally insecure for training. Do not reuse these policies in a real account.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/seed.sh --lab 1|2|all
+
+  --lab 1    seed Lab 01 only
+  --lab 2    seed Lab 02 only
+  --lab all  seed both labs (default)
+EOF
+}
+
+LAB="all"
+if [ "$#" -gt 0 ]; then
+  case "$1" in
+    --lab)
+      [ "$#" -ge 2 ] || { usage >&2; exit 2; }
+      LAB="$2"
+      shift 2
+      ;;
+    --lab=*)
+      LAB="${1#*=}"
+      shift
+      ;;
+    1|2|all)
+      LAB="$1"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage >&2
+      exit 2
+      ;;
+  esac
+fi
+if [ "$#" -gt 0 ]; then
+  usage >&2
+  exit 2
+fi
+case "$LAB" in
+  1|2|all) ;;
+  *) usage >&2; exit 2 ;;
+esac
+
+SEED_LAB1=0
+SEED_LAB2=0
+case "$LAB" in
+  1) SEED_LAB1=1 ;;
+  2) SEED_LAB2=1 ;;
+  all) SEED_LAB1=1; SEED_LAB2=1 ;;
+esac
+
 LAB_QUIET=1 LAB_USE_ROOT=1 source scripts/env.sh
 
 # Setup always runs as the emulator root, even if env.sh loaded a lab access key.
@@ -36,6 +90,12 @@ hash_flag() {
 
 HOL_BUCKET="workshop-hol-internal"
 CTF_BUCKET="workshop-ctf-open-assets"
+LAB01_POLICY_NAME="lab-analyst-s3-internal"
+LAB02_POLICY_NAME="lab-analyst-s3-audit"
+LEGACY_POLICY_NAME="lab-analyst-s3"
+LAB01_HASH=""
+LAB02_HASH=""
+
 mkdir -p build
 rm -f build/lab-credentials.env build/flag.txt build/object.txt build/db-dump.txt build/flag-hashes.env
 
@@ -43,55 +103,91 @@ echo "[1/6] Checking the emulator"
 aws_ s3 ls >/dev/null || { echo "floci not reachable. Run: docker compose up -d --wait"; exit 1; }
 
 echo "[2/6] Creating buckets"
-aws_ s3 mb "s3://$HOL_BUCKET" 2>/dev/null || true
-aws_ s3 mb "s3://$CTF_BUCKET" 2>/dev/null || true
+if [ "$SEED_LAB1" = "1" ]; then
+  aws_ s3 mb "s3://$HOL_BUCKET" 2>/dev/null || true
+fi
+if [ "$SEED_LAB2" = "1" ]; then
+  aws_ s3 mb "s3://$CTF_BUCKET" 2>/dev/null || true
+fi
 
 echo "[3/6] Setting Block Public Access"
 # The CTF bucket is intentionally left open. The HOL bucket is locked down.
-aws_ s3api put-public-access-block --bucket "$CTF_BUCKET" \
-  --public-access-block-configuration \
-  'BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false'
-aws_ s3api put-public-access-block --bucket "$HOL_BUCKET" \
-  --public-access-block-configuration \
-  'BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true'
+if [ "$SEED_LAB2" = "1" ]; then
+  aws_ s3api put-public-access-block --bucket "$CTF_BUCKET" \
+    --public-access-block-configuration \
+    'BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false'
+fi
+if [ "$SEED_LAB1" = "1" ]; then
+  aws_ s3api put-public-access-block --bucket "$HOL_BUCKET" \
+    --public-access-block-configuration \
+    'BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true'
+fi
 
 echo "[4/6] Uploading lab objects"
-FLAG_01="$(make_flag lab01)"
-FLAG_02="$(make_flag lab02)"
+if [ "$SEED_LAB1" = "1" ]; then
+  FLAG_01="$(make_flag lab01)"
+  echo "Internal planning notes. Do not share." > build/notes.txt
+  # Stream flag objects from stdin so no plaintext flag is written to disk.
+  printf '%s\n' "$FLAG_01" | aws_ s3 cp - "s3://$HOL_BUCKET/object.txt"
+  aws_ s3 cp build/notes.txt "s3://$HOL_BUCKET/docs/notes.txt"
+fi
 
-echo "Internal planning notes. Do not share." > build/notes.txt
-echo "<h1>Workshop Public Site</h1>" > build/index.html
-echo "Public site assets." > build/readme.txt
-echo "WORKSHOP LOGO" > build/logo.txt
-
-# Stream flag objects from stdin so no plaintext flag is written to disk.
-printf '%s\n' "$FLAG_01" | aws_ s3 cp - "s3://$HOL_BUCKET/object.txt"
-aws_ s3 cp build/notes.txt "s3://$HOL_BUCKET/docs/notes.txt"
-aws_ s3 cp build/index.html "s3://$CTF_BUCKET/index.html"
-aws_ s3 cp build/readme.txt "s3://$CTF_BUCKET/readme.txt"
-aws_ s3 cp build/logo.txt "s3://$CTF_BUCKET/assets/logo.txt"
-printf '%s\n' "$FLAG_02" | aws_ s3 cp - "s3://$CTF_BUCKET/backup/db-dump.txt"
+if [ "$SEED_LAB2" = "1" ]; then
+  FLAG_02="$(make_flag lab02)"
+  echo "<h1>Workshop Public Site</h1>" > build/index.html
+  echo "Public site assets." > build/readme.txt
+  echo "WORKSHOP LOGO" > build/logo.txt
+  aws_ s3 cp build/index.html "s3://$CTF_BUCKET/index.html"
+  aws_ s3 cp build/readme.txt "s3://$CTF_BUCKET/readme.txt"
+  aws_ s3 cp build/logo.txt "s3://$CTF_BUCKET/assets/logo.txt"
+  printf '%s\n' "$FLAG_02" | aws_ s3 cp - "s3://$CTF_BUCKET/backup/db-dump.txt"
+fi
 
 # Keep only hashes locally. The plaintext flags exist only in the emulator.
-LAB01_HASH="$(hash_flag "$FLAG_01")"
-LAB02_HASH="$(hash_flag "$FLAG_02")"
-if [ -z "$LAB01_HASH" ] || [ -z "$LAB02_HASH" ]; then
-  echo "Could not hash the generated flags." >&2
-  exit 1
+if [ "$SEED_LAB1" = "1" ]; then
+  LAB01_HASH="$(hash_flag "$FLAG_01")"
+  [ -n "$LAB01_HASH" ] || { echo "Could not hash the Lab 01 flag." >&2; exit 1; }
 fi
+if [ "$SEED_LAB2" = "1" ]; then
+  LAB02_HASH="$(hash_flag "$FLAG_02")"
+  [ -n "$LAB02_HASH" ] || { echo "Could not hash the Lab 02 flag." >&2; exit 1; }
+fi
+
 umask 077
-cat > build/flag-hashes.env <<EOF
-# Generated by scripts/seed.sh. Do not commit.
-LAB01_HASH="$LAB01_HASH"
-LAB02_HASH="$LAB02_HASH"
-EOF
+{
+  echo "# Generated by scripts/seed.sh. Do not commit."
+  if [ -n "$LAB01_HASH" ]; then
+    echo "LAB01_HASH=\"$LAB01_HASH\""
+  fi
+  if [ -n "$LAB02_HASH" ]; then
+    echo "LAB02_HASH=\"$LAB02_HASH\""
+  fi
+} > build/flag-hashes.env
 chmod 600 build/flag-hashes.env
 
 echo "[5/6] Creating the lab IAM user and policy"
 if aws_ iam create-user --user-name lab-analyst >/dev/null 2>&1 || aws_ iam get-user --user-name lab-analyst >/dev/null 2>&1; then
-  aws_ iam put-user-policy --user-name lab-analyst --policy-name lab-analyst-s3 \
-    --policy-document "file://seed/hol-user-policy.json" && echo "  IAM user ready" \
-    || echo "  WARNING: could not attach the IAM policy. Check whether floci supports IAM."
+  # Remove old inline policies so switching labs does not leave stale permissions.
+  for policy in "$LAB01_POLICY_NAME" "$LAB02_POLICY_NAME" "$LEGACY_POLICY_NAME"; do
+    aws_ iam delete-user-policy --user-name lab-analyst --policy-name "$policy" >/dev/null 2>&1 || true
+  done
+
+  if [ "$SEED_LAB1" = "1" ]; then
+    if aws_ iam put-user-policy --user-name lab-analyst --policy-name "$LAB01_POLICY_NAME" \
+      --policy-document "file://seed/hol-user-policy.json"; then
+      echo "  Lab 01 IAM policy ready"
+    else
+      echo "  WARNING: could not attach the Lab 01 IAM policy."
+    fi
+  fi
+  if [ "$SEED_LAB2" = "1" ]; then
+    if aws_ iam put-user-policy --user-name lab-analyst --policy-name "$LAB02_POLICY_NAME" \
+      --policy-document "file://seed/ctf-user-policy.json"; then
+      echo "  Lab 02 IAM policy ready"
+    else
+      echo "  WARNING: could not attach the Lab 02 IAM policy."
+    fi
+  fi
 
   # Rotate the access key so re-seeding stays idempotent and env.sh gets fresh credentials.
   OLD_KEYS="$(aws_ iam list-access-keys --user-name lab-analyst \
@@ -123,23 +219,31 @@ EOF
     echo "  WARNING: could not create an access key. Falling back to test/test."
   fi
 else
-  echo "  WARNING: IAM is not available in this floci setup. Lab 01 reads policies from seed/ instead."
+  echo "  WARNING: IAM is not available in this floci setup. Labs read policies from seed/ instead."
 fi
 
 echo "[6/6] Applying bucket policies"
-aws_ s3api put-bucket-policy --bucket "$HOL_BUCKET" --policy "file://seed/hol-bucket-policy.json"
-aws_ s3api put-bucket-policy --bucket "$CTF_BUCKET" --policy "file://seed/ctf-bucket-policy.json"
+if [ "$SEED_LAB1" = "1" ]; then
+  aws_ s3api put-bucket-policy --bucket "$HOL_BUCKET" --policy "file://seed/hol-bucket-policy.json"
+fi
+if [ "$SEED_LAB2" = "1" ]; then
+  aws_ s3api put-bucket-policy --bucket "$CTF_BUCKET" --policy "file://seed/ctf-bucket-policy.json"
+fi
 
 echo
 echo "Seed complete."
-echo "  HOL bucket: s3://$HOL_BUCKET"
-echo "  CTF bucket: s3://$CTF_BUCKET"
-echo "  Flags:      generated for this environment (not stored in the repo)"
+if [ "$SEED_LAB1" = "1" ]; then
+  echo "  Lab 01 bucket: s3://$HOL_BUCKET"
+fi
+if [ "$SEED_LAB2" = "1" ]; then
+  echo "  Lab 02 bucket: s3://$CTF_BUCKET"
+fi
+echo "  Flags:         generated for this environment (not stored in the repo)"
 if [ -f build/lab-credentials.env ]; then
-  echo "  Lab user:   lab-analyst (credentials in build/lab-credentials.env)"
+  echo "  Lab user:      lab-analyst (credentials in build/lab-credentials.env)"
   echo
   echo "Load the lab user in this shell:"
   echo "  source scripts/env.sh"
 else
-  echo "  Lab user:   unavailable; using test/test (emulator root)"
+  echo "  Lab user:      unavailable; using test/test (emulator root)"
 fi

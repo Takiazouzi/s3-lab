@@ -65,11 +65,11 @@ else
   export AWS_SECRET_ACCESS_KEY="test"
   if [ -z "${LAB_QUIET:-}" ]; then
     echo "No lab credentials found; using test/test (emulator root)."
-    echo "Run scripts/seed.sh, then re-source this file to use lab-analyst."
+    echo "Run make lab1 or make lab2, then re-source this file to use lab-analyst."
   fi
 fi
 
 if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
-  echo "Lab credentials are incomplete. Run scripts/seed.sh, then re-source this file." >&2
+  echo "Lab credentials are incomplete. Run make lab1 or make lab2, then re-source this file." >&2
   return 1 2>/dev/null || exit 1
 fi
