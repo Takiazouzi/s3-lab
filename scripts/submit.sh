@@ -35,10 +35,10 @@ else
 fi
 
 if [ -n "${LAB01_HASH:-}" ] && [ "$HASH" = "$LAB01_HASH" ]; then
-  echo "Correct: Lab 01 flag."
+  echo "Valid flag ."
 elif [ -n "${LAB02_HASH:-}" ] && [ "$HASH" = "$LAB02_HASH" ]; then
-  echo "Correct: Lab 02 flag."
+  echo "Valid flag."
 else
-  echo "Not correct. Check the value, the braces and the spelling."
+  echo "Invalid flag ,try again ."
   exit 1
 fi
