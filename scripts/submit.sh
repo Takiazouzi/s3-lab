@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Checks a submitted flag without printing the answer.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HASH_FILE="$ROOT/build/flag-hashes.env"
+
+if [ "${1:-}" = "" ] || [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  cat <<'EOF'
+Usage: scripts/submit.sh 'securinets{...}'
+
+The expected flags are generated when you run scripts/seed.sh.
+EOF
+  exit 0
+fi
+
+if [ ! -s "$HASH_FILE" ]; then
+  echo "No flag hashes found. Run scripts/seed.sh first." >&2
+  exit 1
+fi
+
+# The hash file is generated locally by scripts/seed.sh.
+# shellcheck disable=SC1090
+. "$HASH_FILE"
+if [ -z "${LAB01_HASH:-}" ] || [ -z "${LAB02_HASH:-}" ]; then
+  echo "The local flag hash file is incomplete. Run scripts/seed.sh again." >&2
+  exit 1
+fi
+
+FLAG="$(printf '%s' "$1" | tr -d '[:space:]')"
+if command -v sha256sum >/dev/null 2>&1; then
+  HASH="$(printf '%s' "$FLAG" | sha256sum | awk '{print $1}')"
+else
+  HASH="$(printf '%s' "$FLAG" | shasum -a 256 | awk '{print $1}')"
+fi
+
+case "$HASH" in
+  "$LAB01_HASH")
+    echo "Correct: Lab 01 flag."
+    ;;
+  "$LAB02_HASH")
+    echo "Correct: Lab 02 flag."
+    ;;
+  *)
+    echo "Not correct. Check the value, the braces and the spelling."
+    exit 1
+    ;;
+esac

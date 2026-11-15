@@ -1,0 +1,17 @@
+build/
+.env
+data/
+.DS_Store
+
+# Facilitator-only material: answers, flags and workshop notes
+/FACILITATOR.md
+
+# Files learners download while following the labs
+/object.txt
+/flag.txt
+/notes.txt
+/db-dump.txt
+/evidence/
+labs/*
+.github/workflows
+docs/*

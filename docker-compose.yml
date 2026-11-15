@@ -1,0 +1,15 @@
+services:
+  floci:
+    # Pin the version you tested so the workshop behaves the same next month.
+    image: floci/floci:2.4.0
+    container_name: floci-aws
+    ports:
+      # Bind to localhost only: this emulator is intentionally vulnerable.
+      - "127.0.0.1:4566:4566"
+    environment:
+      - FLOCI_STORAGE_MODE=memory
+      # Enforce S3 bucket policies, public access checks and signatures.
+      # Without this, the bucket-policy Deny in Lab 01 is silently ignored.
+      - FLOCI_SERVICES_S3_ENFORCE_AUTH=true
+      # Optional, for full IAM identity-policy enforcement. See README.md:
+      # - FLOCI_SERVICES_IAM_ENFORCEMENT_ENABLED=true
