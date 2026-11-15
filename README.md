@@ -2,7 +2,7 @@
 
 Hands-on labs for the AWS Security Fundamentals workshop (Securinets-Tekup).
 Everything runs locally against [floci](https://floci.io/floci/).
-The labs cover S3 enumeration, bucket policies and a public-bucket investigation.
+The labs cover S3 enumeration, bucket policies and a public website investigation.
 
 ## Prerequisites
 

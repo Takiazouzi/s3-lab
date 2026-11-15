@@ -89,7 +89,7 @@ hash_flag() {
 }
 
 HOL_BUCKET="workshop-hol-internal"
-CTF_BUCKET="workshop-ctf-open-assets"
+SITE_BUCKET="novashop-site"
 LAB01_POLICY_NAME="lab-analyst-s3-internal"
 LAB02_POLICY_NAME="lab-analyst-s3-audit"
 LEGACY_POLICY_NAME="lab-analyst-s3"
@@ -97,7 +97,8 @@ LAB01_HASH=""
 LAB02_HASH=""
 
 mkdir -p build
-rm -f build/lab-credentials.env build/flag.txt build/object.txt build/db-dump.txt build/flag-hashes.env
+rm -f build/lab-credentials.env build/flag.txt build/object.txt build/db-dump.txt build/flag-hashes.env \
+  build/index.html build/readme.txt build/logo.txt
 
 echo "[1/6] Checking the emulator"
 aws_ s3 ls >/dev/null || { echo "floci not reachable. Run: docker compose up -d --wait"; exit 1; }
@@ -107,13 +108,13 @@ if [ "$SEED_LAB1" = "1" ]; then
   aws_ s3 mb "s3://$HOL_BUCKET" 2>/dev/null || true
 fi
 if [ "$SEED_LAB2" = "1" ]; then
-  aws_ s3 mb "s3://$CTF_BUCKET" 2>/dev/null || true
+  aws_ s3 mb "s3://$SITE_BUCKET" 2>/dev/null || true
 fi
 
 echo "[3/6] Setting Block Public Access"
-# The CTF bucket is intentionally left open. The HOL bucket is locked down.
+# The Lab 02 website bucket is intentionally left public. The HOL bucket is locked down.
 if [ "$SEED_LAB2" = "1" ]; then
-  aws_ s3api put-public-access-block --bucket "$CTF_BUCKET" \
+  aws_ s3api put-public-access-block --bucket "$SITE_BUCKET" \
     --public-access-block-configuration \
     'BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false'
 fi
@@ -134,13 +135,8 @@ fi
 
 if [ "$SEED_LAB2" = "1" ]; then
   FLAG_02="$(make_flag lab02)"
-  echo "<h1>Workshop Public Site</h1>" > build/index.html
-  echo "Public site assets." > build/readme.txt
-  echo "WORKSHOP LOGO" > build/logo.txt
-  aws_ s3 cp build/index.html "s3://$CTF_BUCKET/index.html"
-  aws_ s3 cp build/readme.txt "s3://$CTF_BUCKET/readme.txt"
-  aws_ s3 cp build/logo.txt "s3://$CTF_BUCKET/assets/logo.txt"
-  printf '%s\n' "$FLAG_02" | aws_ s3 cp - "s3://$CTF_BUCKET/backup/db-dump.txt"
+  aws_ s3 cp --recursive seed/lab02-site/ "s3://$SITE_BUCKET/"
+  printf '%s\n' "$FLAG_02" | aws_ s3 cp - "s3://$SITE_BUCKET/backup/db-dump.txt"
 fi
 
 # Keep only hashes locally. The plaintext flags exist only in the emulator.
@@ -222,12 +218,14 @@ else
   echo "  WARNING: IAM is not available in this floci setup. Labs read policies from seed/ instead."
 fi
 
-echo "[6/6] Applying bucket policies"
+echo "[6/6] Applying bucket policies and website"
 if [ "$SEED_LAB1" = "1" ]; then
   aws_ s3api put-bucket-policy --bucket "$HOL_BUCKET" --policy "file://seed/hol-bucket-policy.json"
 fi
 if [ "$SEED_LAB2" = "1" ]; then
-  aws_ s3api put-bucket-policy --bucket "$CTF_BUCKET" --policy "file://seed/ctf-bucket-policy.json"
+  aws_ s3api put-bucket-policy --bucket "$SITE_BUCKET" --policy "file://seed/ctf-bucket-policy.json"
+  aws_ s3api put-bucket-website --bucket "$SITE_BUCKET" \
+    --website-configuration '{"IndexDocument":{"Suffix":"index.html"},"ErrorDocument":{"Key":"error.html"}}'
 fi
 
 echo
@@ -236,7 +234,8 @@ if [ "$SEED_LAB1" = "1" ]; then
   echo "  Lab 01 bucket: s3://$HOL_BUCKET"
 fi
 if [ "$SEED_LAB2" = "1" ]; then
-  echo "  Lab 02 bucket: s3://$CTF_BUCKET"
+  echo "  Lab 02 bucket: s3://$SITE_BUCKET"
+  echo "  Lab 02 site:   http://$SITE_BUCKET.s3-website-us-east-1.localhost:4566/"
 fi
 echo "  Flags:         generated for this environment (not stored in the repo)"
 if [ -f build/lab-credentials.env ]; then
